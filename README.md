@@ -5,32 +5,64 @@ Step-by-Step Guide
 2. **Formulate the Ising Model**: Convert the clique cover constraints into an Ising Hamiltonian.
 3. **Submit to D-Wave**: Use D-Wave’s tools to solve the Ising problem.
 Step 1: Define the Graph
+Import Required Libraries
 
-First, install the required libraries if you haven't already:
-sh
+from dimod import BinaryQuadraticModel
+from collections import defaultdict
 pip install dwave-system networkx
 
-Step 2: Formulate the Ising Model
+Step 2: Define the Function to Create QUBO
 
-To convert the clique cover problem to an Ising model, we need to set up the Hamiltonian. Here's the Python code to do this:
+- `graph`: The input graph for which we want to find the clique cover.
+- `num_cliques`: The number of cliques to partition the graph into.
+- `n`: The number of nodes in the graph.
+- `Q`: A defaultdict to hold the QUBO matrix, initialized to float.
+- `x = lambda i, k: i * num_cliques + k`: A lambda function to map the 2D variable indices (i, k) to a single index for the QUBO.
 
+
+Step 3: Ensure Each Node is in Exactly One Clique
 python
-from dimod import Spin, BinaryQuadraticModel
-from collections import defaultdict
+    # Each node must be in exactly one clique
+    for i in range(n):
+        for k in range(num_cliques):
+            Q[(x(i, k), x(i, k))] -= 1
+            for k2 in range(k + 1, num_cliques):
+                Q[(x(i, k), x(i, k2))] += 2
 
-Step 3: Submit to D-Wave
+**For each node `i` and each clique `k`**:
+  - `Q[(x(i, k), x(i, k))] -= 1`: Add a bias term to the QUBO for including the node in a clique.
+  - **For each pair of different cliques `(k, k2)`**:
+    - `Q[(x(i, k), x(i, k2))] += 2`: Add a penalty term to prevent the node from being in more than one clique.
 
-Finally, solve the Ising model using D-Wave:
+Step 4: Ensure Each Edge is Covered by At Least One Clique
 
-python
-from dwave.system import DWaveSampler, EmbeddingComposite
+    # Each edge must be covered by at least one clique
+    for u, v in graph.edges():
+        for k in range(num_cliques):
+            Q[(x(u, k), x(v, k))] -= 1
 
-Explanation
+- **For each edge `(u, v)` and each clique `k`**:
+  - `Q[(x(u, k), x(v, k))] -= 1`: Add a term to reward the inclusion of both endpoints of an edge in the same clique.
 
-- **Graph Definition**: A simple graph `G` is defined using `networkx`.
-- **Ising Formulation**: 
-  - `h` is the linear term representing individual biases of the spins.
-  - `J` is the quadratic term representing interactions between spins.
-  - The constraints are converted such that each node belongs to exactly one clique, and each edge is covered by at least one clique.
-- **Solving**: The Ising problem is solved using D-Wave’s sampler, and the solution is interpreted to identify the cliques.
+#### Step 5: Convert QUBO to Dict and Return
 
+    # Convert defaultdict to dict
+    return dict(Q)
+
+- `return dict(Q)`: Convert the defaultdict `Q` to a standard dictionary before returning it.
+
+#### Step 6: Define Parameters and Create QUBO
+# Parameters
+num_cliques = 2  # Adjust based on the graph's structure
+Q = clique_cover_qubo(G, num_cliques)
+
+- `num_cliques = 2`: Set the number of cliques to partition the graph into.
+- `Q = clique_cover_qubo(G, num_cliques)`: Call the function to generate the QUBO matrix for the given graph and number of cliques.
+
+#### Step 7: Convert QUBO to BQM
+
+bqm = BinaryQuadraticModel.from_qubo(Q)
+
+- `bqm = BinaryQuadraticModel.from_qubo(Q)`: Convert the QUBO matrix `Q` to a Binary Quadratic Model (BQM) using `dimod`.
+
+#### Step 8: Finally, using D'wave sampler to solve the model
